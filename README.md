@@ -1,5 +1,5 @@
 <details>
-<summary>English Version</summary>
+<summary>English</summary>
     
 # STAY FOLIO - Admin Features Analysis
 
