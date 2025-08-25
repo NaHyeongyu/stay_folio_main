@@ -1,5 +1,6 @@
-# English
-
+<details>
+<summary>English Version</summary>
+    
 # STAY FOLIO - Admin Features Analysis
 
 This document contains a detailed analysis of the admin features implemented in the STAY FOLIO project, focusing on 'Reservation Inquiry' and 'Member Inquiry'. It explains the main flows, core code, and technical strengths that can be highlighted in a portfolio.
@@ -351,9 +352,11 @@ Defines the SQL query for keyword search using MyBatis. The query uses the `UPPE
 - **Dynamic SQL for Flexible Search**: Implements case-insensitive partial matching search on stay names and locations using MyBatis `LIKE` and `UPPER`. Utilizes `CASE` statements for ranking results based on keyword match priority, showing SQL optimization.
 - **Frontend-Backend Integration**: Demonstrates full-stack skills by connecting JSP, JavaScript (jQuery), Spring Controller, Service, and Mapper. Especially notable is the use of `data-api` attributes to call backend APIs directly from the frontend.
 - **Performance Optimization**: Limits auto-suggestion results to `ROWNUM <= 5` to reduce unnecessary data transfer and improve response speed.
+</details>
 
-# 한국어
-
+<details>
+<summary>한국어</summary>
+    
 # **STAY FOLIO - 관리자 기능 분석 (Admin Features Analysis)**
 
 이 문서는 STAY FOLIO 프로젝트에서 구현된 관리자 기능 중 '예약 조회'와 '회원 조회'에 대한 상세 분석을 담고 있습니다. 각 기능의 주요 흐름, 핵심 코드, 그리고 포트폴리오에 활용할 수 있는 기술적 강점들을 설명합니다.
