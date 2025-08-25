@@ -227,3 +227,115 @@ public int selectAdminMemberTotal(Criteria cri);
 *   **데이터베이스 연동 및 관리**: MyBatis를 활용하여 데이터베이스와의 효율적인 연동을 구현하고, SQL 쿼리를 XML 파일로 분리하여 관리함으로써 코드의 가독성과 유지보수성을 확보했습니다.
 
 ---
+## 3. 숙소 텍스트 검색 기능 (Text Search for Stays)
+
+사용자가 키워드를 입력하여 숙소를 검색하는 기능입니다. 주로 숙소 이름이나 지역명을 기반으로 검색이 이루어집니다.
+
+### 주요 기능 흐름 (Key Feature Flow)
+
+1.  **사용자 입력 (JSP)**: `search.jsp` 페이지의 검색 입력 필드(`id="keyword"`)에 사용자가 숙소 이름이나 지역명 등의 키워드를 입력합니다. 이 입력 필드는 `data-api="${pageContext.request.contextPath}/search/keyword"` 속성을 가지고 있어, 입력 시 자동 완성(suggestion) 기능을 위한 AJAX 요청을 보낼 수 있습니다.
+2.  **자동 완성 요청 (JavaScript & Controller)**: 사용자가 키워드를 입력할 때마다 `resources/js/search/keyword.js` 스크립트에서 `/search/suggestions` 엔드포인트로 AJAX 요청을 보냅니다. `SearchController`의 `getSuggestions` 메서드가 이 요청을 받아 `StayService`의 `searchStaysSuggestions`를 호출하여 자동 완성 목록을 조회합니다.
+3.  **자동 완성 데이터 조회 (Service & Mapper)**: `StayServiceImpl`의 `searchStaysSuggestions` 메서드는 `StayMapper`의 `searchStaysSuggestions`를 호출하여 데이터베이스에서 키워드에 해당하는 숙소 이름 또는 지역명을 조회합니다. 이 쿼리는 `t_stay_info` 테이블에서 `si_name` 또는 `si_loca` 필드를 기준으로 `LIKE` 검색을 수행합니다.
+4.  **검색 결과 표시 (JSP)**: (현재 제공된 `search.jsp`에는 일반적인 텍스트 검색 폼 제출 로직이 명시적으로 보이지 않지만, 일반적으로는) 사용자가 검색 버튼을 클릭하거나 엔터를 누르면, `searchForm` (`action="/search/results"`)을 통해 검색 요청이 서버로 전송됩니다. 이 요청은 `StayService`의 `getStayListFiltered` (또는 유사한 검색 메서드)를 통해 처리되고, 결과는 `stayList`라는 이름으로 JSP에 전달되어 `searchResultsGrid` 영역에 숙소 목록이 렌더링됩니다.
+
+### 핵심 코드 (Core Code)
+
+#### JSP: `search.jsp`
+
+사용자 입력을 받는 검색 필드입니다. 자동 완성 기능을 위한 `data-api` 속성이 포함되어 있습니다.
+
+```html
+<!-- src/main/webapp/WEB-INF/views/search/search.jsp -->
+<input type="text" id="keyword" name="keyword" placeholder="지역, 숙소명을 검색해보세요." autocomplete="off" data-api="${pageContext.request.contextPath}/search/keyword" data-context="${pageContext.request.contextPath}" />
+```
+
+#### Controller: `SearchController.java`
+
+자동 완성 요청을 처리하고, 서비스 계층으로 키워드를 전달합니다.
+
+```java
+// src/main/java/com/hotel/controller/SearchController.java
+@Log4j
+@Controller
+public class SearchController {
+
+    @Autowired
+    private StayService stayService;
+
+    // 자동완성용
+    @GetMapping(value = "/search/suggestions", produces = "application/json; charset=UTF-8")
+    @ResponseBody
+    public List<StayVO> getSuggestions(@RequestParam(name = "keyword", required = false) String keyword) {
+        String q = (keyword == null) ? "" : keyword.trim();
+        if (q.isEmpty() || q.length() < 1) {
+            return Collections.emptyList();
+        }
+        List<StayVO> results = stayService.searchStaysSuggestions(q);
+        if (log.isDebugEnabled()) {
+            log.debug("Keyword suggestions q='" + q + "' -> results=" + (results == null ? 0 : results.size()));
+        }
+        return results;
+    }
+}
+```
+
+#### Service: `StayServiceImpl.java`
+
+자동 완성 로직을 수행하며, 매퍼를 통해 DB에 접근합니다.
+
+```java
+// src/main/java/com/hotel/service/StayServiceImpl.java
+@Override
+public List<StayVO> searchStaysSuggestions(String keyword) {
+    if (keyword == null || keyword.trim().isEmpty()) {
+        return new ArrayList<>();
+    }
+    return stayMapper.searchStaysSuggestions(keyword.trim());
+}
+```
+
+#### Mapper Interface: `StayMapper.java`
+
+데이터베이스 접근을 위한 인터페이스에 자동 완성 메서드를 정의합니다.
+
+```java
+// src/main/java/com/hotel/mapper/StayMapper.java
+List<StayVO> searchStaysSuggestions(@Param("keyword") String keyword);
+```
+
+#### Mapper XML: `StayMapper.xml`
+
+MyBatis를 사용하여 키워드 검색을 위한 SQL 쿼리를 정의합니다. `UPPER` 함수와 `LIKE` 연산자를 사용하여 대소문자 구분 없이 검색하며, `ROWNUM`을 통해 최대 5개의 결과를 반환합니다.
+
+```xml
+<!-- src/main/resources/com/hotel/mapper/StayMapper.xml -->
+<select id="searchStaysSuggestions" parameterType="string"
+    resultType="com.hotel.domain.StayVO">
+    SELECT * FROM (
+        SELECT
+            s.si_id AS siId,
+            s.si_name AS siName,
+            s.si_loca AS siLoca
+        FROM t_stay_info s
+        WHERE s.si_show = '1'
+          AND s.si_delete = '0'
+          AND (
+                UPPER(s.si_name) LIKE '%' || UPPER(#{keyword}) || '%'
+                OR UPPER(s.si_loca) LIKE '%' || UPPER(#{keyword}) || '%'
+            )
+        ORDER BY
+            CASE WHEN UPPER(s.si_name) LIKE UPPER(#{keyword}) || '%' THEN 1 ELSE 2 END,
+            s.si_name
+        ) WHERE ROWNUM &lt;= 5
+</select>
+```
+
+### 포트폴리오 주요 포인트 (Key Portfolio Points)
+
+*   **실시간 자동 완성(Auto-suggestion) 기능 구현**: 사용자가 검색어를 입력하는 동안 실시간으로 관련 검색어를 제안하는 기능을 구현하여 사용자 경험(UX)을 향상시켰습니다. 이는 AJAX 통신과 백엔드 로직의 효율적인 연동을 보여줍니다.
+*   **동적 SQL을 활용한 유연한 검색**: `MyBatis`의 `LIKE` 연산자와 `UPPER` 함수를 사용하여 숙소 이름과 지역명에 대한 대소문자 구분 없는 부분 일치 검색을 구현했습니다. `CASE` 문을 활용하여 검색어 일치도에 따른 정렬 우선순위를 부여하는 등 SQL 쿼리 최적화 노력을 기울였습니다.
+*   **프론트엔드-백엔드 연동**: JSP, JavaScript(jQuery), Spring Controller, Service, Mapper로 이어지는 풀스택 개발 능력을 보여줍니다. 특히 `data-api` 속성을 활용하여 프론트엔드에서 백엔드 API를 호출하는 방식을 구현한 점은 주목할 만합니다.
+*   **성능 최적화**: 자동 완성 기능에서 `ROWNUM <= 5`를 사용하여 불필요한 데이터 전송을 줄이고, 검색 결과 수를 제한하여 응답 속도를 최적화했습니다.
+
+---
+
