@@ -226,3 +226,113 @@ public int selectAdminMemberTotal(Criteria cri);
 *   **Database Integration and Management**: Implemented efficient database integration using MyBatis and separated SQL queries into XML files for better readability and maintainability.
 
 ---
+## 3. Stay Text Search Feature
+
+This feature allows users to search for stays by entering keywords, mainly based on stay names or locations.
+
+### Key Feature Flow
+
+1. **User Input (JSP)**: In the `search.jsp` page, users enter stay names or location keywords into the search field (`id="keyword"`). This input field has the attribute `data-api="${pageContext.request.contextPath}/search/keyword"`, which sends AJAX requests for auto-suggestions as the user types.
+2. **Auto-suggestion Request (JavaScript & Controller)**: Each time the user enters a keyword, the script `resources/js/search/keyword.js` sends an AJAX request to the `/search/suggestions` endpoint. The `SearchController.getSuggestions` method handles this request and calls `StayService.searchStaysSuggestions` to retrieve the suggestion list.
+3. **Auto-suggestion Data Retrieval (Service & Mapper)**: The `StayServiceImpl.searchStaysSuggestions` method calls `StayMapper.searchStaysSuggestions`, which queries the database for stay names or locations that match the keyword. The query performs a `LIKE` search on the `si_name` or `si_loca` fields in the `t_stay_info` table.
+4. **Result Display (JSP)**: (Although the provided `search.jsp` does not explicitly show the general form submission logic,) typically when the user clicks the search button or presses Enter, the `searchForm` (`action="/search/results"`) sends the search request to the server. This request is processed by a method such as `StayService.getStayListFiltered`, and the results are passed as `stayList` to the JSP, which renders the stay list inside the `searchResultsGrid` section.
+
+### Core Code
+
+#### JSP: `search.jsp`
+
+The input field where users enter their search keywords. The `data-api` attribute enables the auto-suggestion feature.
+
+```html
+<!-- src/main/webapp/WEB-INF/views/search/search.jsp -->
+<input type="text" id="keyword" name="keyword" placeholder="Search by location or stay name." autocomplete="off" data-api="${pageContext.request.contextPath}/search/keyword" data-context="${pageContext.request.contextPath}" />
+```
+
+#### Controller: `SearchController.java`
+
+Handles the auto-suggestion requests and passes the keyword to the service layer.
+
+```java
+// src/main/java/com/hotel/controller/SearchController.java
+@Log4j
+@Controller
+public class SearchController {
+
+    @Autowired
+    private StayService stayService;
+
+    // For auto-suggestions
+    @GetMapping(value = "/search/suggestions", produces = "application/json; charset=UTF-8")
+    @ResponseBody
+    public List<StayVO> getSuggestions(@RequestParam(name = "keyword", required = false) String keyword) {
+        String q = (keyword == null) ? "" : keyword.trim();
+        if (q.isEmpty() || q.length() < 1) {
+            return Collections.emptyList();
+        }
+        List<StayVO> results = stayService.searchStaysSuggestions(q);
+        if (log.isDebugEnabled()) {
+            log.debug("Keyword suggestions q='" + q + "' -> results=" + (results == null ? 0 : results.size()));
+        }
+        return results;
+    }
+}
+```
+
+#### Service: `StayServiceImpl.java`
+
+Executes the auto-suggestion logic and accesses the DB through the mapper.
+
+```java
+// src/main/java/com/hotel/service/StayServiceImpl.java
+@Override
+public List<StayVO> searchStaysSuggestions(String keyword) {
+    if (keyword == null || keyword.trim().isEmpty()) {
+        return new ArrayList<>();
+    }
+    return stayMapper.searchStaysSuggestions(keyword.trim());
+}
+```
+
+#### Mapper Interface: `StayMapper.java`
+
+Defines the interface method for database access related to auto-suggestions.
+
+```java
+// src/main/java/com/hotel/mapper/StayMapper.java
+List<StayVO> searchStaysSuggestions(@Param("keyword") String keyword);
+```
+
+#### Mapper XML: `StayMapper.xml`
+
+Defines the SQL query for keyword search using MyBatis. The query uses the `UPPER` function and `LIKE` operator for case-insensitive search and restricts the result to a maximum of 5 rows with `ROWNUM`.
+
+```xml
+<!-- src/main/resources/com/hotel/mapper/StayMapper.xml -->
+<select id="searchStaysSuggestions" parameterType="string"
+    resultType="com.hotel.domain.StayVO">
+    SELECT * FROM (
+        SELECT
+            s.si_id AS siId,
+            s.si_name AS siName,
+            s.si_loca AS siLoca
+        FROM t_stay_info s
+        WHERE s.si_show = '1'
+          AND s.si_delete = '0'
+          AND (
+                UPPER(s.si_name) LIKE '%' || UPPER(#{keyword}) || '%'
+                OR UPPER(s.si_loca) LIKE '%' || UPPER(#{keyword}) || '%'
+            )
+        ORDER BY
+            CASE WHEN UPPER(s.si_name) LIKE UPPER(#{keyword}) || '%' THEN 1 ELSE 2 END,
+            s.si_name
+        ) WHERE ROWNUM <= 5
+</select>
+```
+
+### Portfolio Highlights
+
+* **Real-time Auto-suggestion Implementation**: Provides instant keyword suggestions while typing, enhancing user experience (UX). Demonstrates efficient integration of AJAX communication with backend logic.
+* **Dynamic SQL for Flexible Search**: Implements case-insensitive partial matching search on stay names and locations using MyBatis `LIKE` and `UPPER`. Utilizes `CASE` statements for ranking results based on keyword match priority, showing SQL optimization.
+* **Frontend-Backend Integration**: Demonstrates full-stack skills by connecting JSP, JavaScript (jQuery), Spring Controller, Service, and Mapper. Especially notable is the use of `data-api` attributes to call backend APIs directly from the frontend.
+* **Performance Optimization**: Limits auto-suggestion results to `ROWNUM <= 5` to reduce unnecessary data transfer and improve response speed.
+
