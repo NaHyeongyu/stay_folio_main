@@ -492,12 +492,12 @@ MyBatis를 사용하여 동적 SQL 쿼리를 정의합니다.
 
 - **다중 조건 검색 및 동적 SQL 구현**: 예약 상태, 체크인/체크아웃 날짜, 회원 이름, 숙소 이름, 객실 이름 등 다양한 검색 조건을 조합하여 데이터를 조회할 수 있도록 동적 SQL(`MyBatis <if>`, `<trim>`, `<foreach>`)을 활용했습니다. 이는 복잡한 검색 요구사항을 유연하게 처리할 수 있음을 보여줍니다.
 - **서버 측 페이징 처리**: 대량의 데이터 조회 시 성능 저하를 방지하기 위해 `LIMIT`와 `OFFSET`을 활용한 서버 측 페이징을 구현했습니다. `PageDTO` 객체를 통해 전체 데이터 수와 현재 페이지 정보를 관리하여 효율적인 UI를 제공합니다.
-- **계층형 아키텍처 설계**: Controller-Service-Mapper로 이어지는 명확한 계층 분리를 통해 각 계층의 역할을 명확히 하고, 코드의 유지보수성과 확장성을 높였습니다. 이는 Spring MVC 기반의 견고한 애플리케이션 설계 능력을 강조할 수 있습니다.
+- **계층형 아키텍처 설계**: Controller-Service-Mapper로 이어지는 명확한 계층 분리를 통해 각 계층의 역할을 명확히 하고, 코드의 유지보수성과 확장성을 높였습니다. 
 - **DTO(Data Transfer Object) 활용**: `AdminReservationListDTO`를 사용하여 필요한 데이터만 선별하여 전송함으로써 데이터 전송 효율성을 높이고, 계층 간의 데이터 결합도를 낮췄습니다.
 
 ## **2. 관리자 회원 조회 (Admin Member Inquiry)**
 
-관리자가 시스템에 등록된 회원 정보를 검색하고 페이징하여 조회할 수 있는 기능입니다. (예약 조회와 유사한 구조로 구현되었을 것으로 예상됩니다.)
+관리자가 시스템에 등록된 회원 정보를 검색하고 페이징하여 조회할 수 있는 기능입니다.
 
 ### **주요 기능 흐름 (Key Feature Flow)**
 
@@ -588,10 +588,10 @@ public int selectAdminMemberTotal(Criteria cri);
 
 ```
 
-### **포트폴리오 주요 포인트 (Key Portfolio Points)**
+### **주요 포인트 (Key Portfolio Points)**
 
-- **재사용 가능한 검색 및 페이징 로직**: `Criteria` 및 `PageDTO` 객체를 공통으로 사용하여 예약 조회와 유사하게 회원 조회에서도 검색 조건 및 페이징 로직을 재사용했습니다. 이는 코드의 중복을 줄이고 개발 효율성을 높이는 좋은 예시입니다.
-- **유연한 회원 검색 기능**: 회원 ID, 이름, 전화번호 등 다양한 기준으로 회원을 검색할 수 있도록 동적 SQL을 활용했습니다. 이는 관리자가 필요한 정보를 신속하게 찾을 수 있도록 돕는 사용자 친화적인 기능입니다.
+- **재사용 가능한 검색 및 페이징 로직**: `Criteria` 및 `PageDTO` 객체를 공통으로 사용하여 예약 조회와 유사하게 회원 조회에서도 검색 조건 및 페이징 로직을 재사용했습니다.
+- **유연한 회원 검색 기능**: 회원 ID, 이름, 전화번호 등 다양한 기준으로 회원을 검색할 수 있도록 동적 SQL을 활용했습니다.
 - **데이터베이스 연동 및 관리**: MyBatis를 활용하여 데이터베이스와의 효율적인 연동을 구현하고, SQL 쿼리를 XML 파일로 분리하여 관리함으로써 코드의 가독성과 유지보수성을 확보했습니다.
 
 ---
@@ -605,7 +605,7 @@ public int selectAdminMemberTotal(Criteria cri);
 1. **사용자 입력 (JSP)**: `search.jsp` 페이지의 검색 입력 필드(`id="keyword"`)에 사용자가 숙소 이름이나 지역명 등의 키워드를 입력합니다. 이 입력 필드는 `data-api="${pageContext.request.contextPath}/search/keyword"` 속성을 가지고 있어, 입력 시 자동 완성(suggestion) 기능을 위한 AJAX 요청을 보낼 수 있습니다.
 2. **자동 완성 요청 (JavaScript & Controller)**: 사용자가 키워드를 입력할 때마다 `resources/js/search/keyword.js` 스크립트에서 `/search/suggestions` 엔드포인트로 AJAX 요청을 보냅니다. `SearchController`의 `getSuggestions` 메서드가 이 요청을 받아 `StayService`의 `searchStaysSuggestions`를 호출하여 자동 완성 목록을 조회합니다.
 3. **자동 완성 데이터 조회 (Service & Mapper)**: `StayServiceImpl`의 `searchStaysSuggestions` 메서드는 `StayMapper`의 `searchStaysSuggestions`를 호출하여 데이터베이스에서 키워드에 해당하는 숙소 이름 또는 지역명을 조회합니다. 이 쿼리는 `t_stay_info` 테이블에서 `si_name` 또는 `si_loca` 필드를 기준으로 `LIKE` 검색을 수행합니다.
-4. **검색 결과 표시 (JSP)**: (현재 제공된 `search.jsp`에는 일반적인 텍스트 검색 폼 제출 로직이 명시적으로 보이지 않지만, 일반적으로는) 사용자가 검색 버튼을 클릭하거나 엔터를 누르면, `searchForm` (`action="/search/results"`)을 통해 검색 요청이 서버로 전송됩니다. 이 요청은 `StayService`의 `getStayListFiltered` (또는 유사한 검색 메서드)를 통해 처리되고, 결과는 `stayList`라는 이름으로 JSP에 전달되어 `searchResultsGrid` 영역에 숙소 목록이 렌더링됩니다.
+4. **검색 결과 표시 (JSP)**: 사용자가 리스트에 있는 숙소를 선택하면, `searchForm` (`action="/search/results"`)을 통해 검색 요청이 서버로 전송됩니다. 이 요청은 `StayService`의 `getStayListFiltered` (또는 유사한 검색 메서드)를 통해 처리되고, 결과는 `stayList`라는 이름으로 JSP에 전달되어 `searchResultsGrid` 영역에 숙소 목록이 렌더링됩니다.
 
 ### **핵심 코드 (Core Code)**
 
@@ -706,7 +706,7 @@ MyBatis를 사용하여 키워드 검색을 위한 SQL 쿼리를 정의합니다
 
 ### **포트폴리오 주요 포인트 (Key Portfolio Points)**
 
-- **실시간 자동 완성(Auto-suggestion) 기능 구현**: 사용자가 검색어를 입력하는 동안 실시간으로 관련 검색어를 제안하는 기능을 구현하여 사용자 경험(UX)을 향상시켰습니다. 이는 AJAX 통신과 백엔드 로직의 효율적인 연동을 보여줍니다.
+- **실시간 자동 완성(Auto-suggestion) 기능 구현**: 사용자가 검색어를 입력하는 동안 실시간으로 관련 검색어를 제안하는 기능을 구현하여 사용자 경험(UX)을 향상시켰습니다.
 - **동적 SQL을 활용한 유연한 검색**: `MyBatis`의 `LIKE` 연산자와 `UPPER` 함수를 사용하여 숙소 이름과 지역명에 대한 대소문자 구분 없는 부분 일치 검색을 구현했습니다. `CASE` 문을 활용하여 검색어 일치도에 따른 정렬 우선순위를 부여하는 등 SQL 쿼리 최적화 노력을 기울였습니다.
-- **프론트엔드-백엔드 연동**: JSP, JavaScript(jQuery), Spring Controller, Service, Mapper로 이어지는 풀스택 개발 능력을 보여줍니다. 특히 `data-api` 속성을 활용하여 프론트엔드에서 백엔드 API를 호출하는 방식을 구현한 점은 주목할 만합니다.
-- **성능 최적화**: 자동 완성 기능에서 `ROWNUM <= 5`를 사용하여 불필요한 데이터 전송을 줄이고, 검색 결과 수를 제한하여 응답 속도를 최적화했습니다.
+- **프론트엔드-백엔드 연동**: JSP, JavaScript(jQuery), Spring Controller, Service, Mapper로 이어지게 프론트엔드-백엔드를 연동했습니다.
+
