@@ -596,32 +596,74 @@ public int selectAdminMemberTotal(Criteria cri);
 
 ---
 
-## **3. 숙소 텍스트 검색 기능 (Text Search for Stays)**
+# 3. 숙소 텍스트 검색 기능 (Text Search for Stays)
 
-사용자가 키워드를 입력하여 숙소를 검색하는 기능입니다. 주로 숙소 이름이나 지역명을 기반으로 검색이 이루어집니다.
+사용자가 키워드를 입력하여 숙소를 검색합니다. 주로 숙소 이름 또는 지역명 기준으로 자동완성과 결과 목록을 제공합니다.
 
-### **주요 기능 흐름 (Key Feature Flow)**
+## 주요 기능 흐름
 
-1. **사용자 입력 (JSP)**: `search.jsp` 페이지의 검색 입력 필드(`id="keyword"`)에 사용자가 숙소 이름이나 지역명 등의 키워드를 입력합니다. 이 입력 필드는 `data-api="${pageContext.request.contextPath}/search/keyword"` 속성을 가지고 있어, 입력 시 자동 완성(suggestion) 기능을 위한 AJAX 요청을 보낼 수 있습니다.
-2. **자동 완성 요청 (JavaScript & Controller)**: 사용자가 키워드를 입력할 때마다 `resources/js/search/keyword.js` 스크립트에서 `/search/suggestions` 엔드포인트로 AJAX 요청을 보냅니다. `SearchController`의 `getSuggestions` 메서드가 이 요청을 받아 `StayService`의 `searchStaysSuggestions`를 호출하여 자동 완성 목록을 조회합니다.
-3. **자동 완성 데이터 조회 (Service & Mapper)**: `StayServiceImpl`의 `searchStaysSuggestions` 메서드는 `StayMapper`의 `searchStaysSuggestions`를 호출하여 데이터베이스에서 키워드에 해당하는 숙소 이름 또는 지역명을 조회합니다. 이 쿼리는 `t_stay_info` 테이블에서 `si_name` 또는 `si_loca` 필드를 기준으로 `LIKE` 검색을 수행합니다.
-4. **검색 결과 표시 (JSP)**: 사용자가 리스트에 있는 숙소를 선택하면, `searchForm` (`action="/search/results"`)을 통해 검색 요청이 서버로 전송됩니다. 이 요청은 `StayService`의 `getStayListFiltered` (또는 유사한 검색 메서드)를 통해 처리되고, 결과는 `stayList`라는 이름으로 JSP에 전달되어 `searchResultsGrid` 영역에 숙소 목록이 렌더링됩니다.
+- 사용자 입력 (JSP)
+  - `search.jsp`의 `#keyword` 입력 필드에서 키워드를 입력합니다.
+  - 현재 스크립트는 컨텍스트 경로를 `data-context`로 전달받아 사용합니다. `data-api` 속성은 마크업에 존재하더라도 자동완성 로직에서는 사용하지 않습니다.
 
-### **핵심 코드 (Core Code)**
+- 자동 완성 요청 (JavaScript & Controller)
+  - `resources/js/search/keyword.js`가 입력/포커스 시 `GET {context}/search/suggestions?keyword=...`를 호출합니다.
+  - `SearchController#getSuggestions`가 요청을 받아 `StayService#searchStaysSuggestions`를 호출합니다.
 
-### **JSP: `search.jsp`**
+- 자동 완성 데이터 조회 (Service & Mapper)
+  - `StayServiceImpl#searchStaysSuggestions`가 `StayMapper#searchStaysSuggestions`로 위임하여 DB에서 부분 일치 검색을 수행합니다.
+  - SQL은 `t_stay_info`에서 `si_name`/`si_loca` 대소문자 무시 부분일치, 접두 일치 우선 정렬, 최대 5건 제한을 합니다.
 
-사용자 입력을 받는 검색 필드입니다. 자동 완성 기능을 위한 `data-api` 속성이 포함되어 있습니다.
+- 결과 이동/목록 표시 (JSP & JS)
+  - 자동완성 항목 클릭 시 폼 제출이 아닌 상세 페이지(`/stay/{siId}`)로 즉시 이동합니다. 체크인/체크아웃/인원은 쿼리스트링으로 전달됩니다.
+  - 지역/카테고리/일정/인원 필터 변경 시 `resources/js/search/searchFilter.js`가 `GET /stay/search`로 요청하고 응답의 `#searchResultsSection`만 부분 갱신합니다.
+  - 현재 코드에는 `/search/results` 엔드포인트는 사용되지 않습니다.
+
+## 핵심 코드 (Core Code)
+
+### JSP: 입력 필드
+
+파일: `src/main/webapp/WEB-INF/views/search/search.jsp`
 
 ```html
 <!-- src/main/webapp/WEB-INF/views/search/search.jsp -->
-<input type="text" id="keyword" name="keyword" placeholder="지역, 숙소명을 검색해보세요." autocomplete="off" data-api="${pageContext.request.contextPath}/search/keyword" data-context="${pageContext.request.contextPath}" />
-
+<input
+  type="text"
+  id="keyword"
+  name="keyword"
+  placeholder="지역, 숙소명을 검색해보세요."
+  autocomplete="off"
+  data-context="${pageContext.request.contextPath}" />
 ```
 
-### **Controller: `SearchController.java`**
+참고: 실제 코드에는 `data-api="${pageContext.request.contextPath}/search/keyword"`가 남아 있으나, `keyword.js`는 이를 사용하지 않습니다.
 
-자동 완성 요청을 처리하고, 서비스 계층으로 키워드를 전달합니다.
+### JavaScript: 자동완성 요청 및 선택 시 이동
+
+파일: `src/main/webapp/resources/js/search/keyword.js`
+
+```javascript
+// 요청
+$.ajax({
+  url: ctx + "/search/suggestions",
+  method: "GET",
+  dataType: "json",
+  data: { keyword: q },
+});
+
+// 항목 선택 시 상세 페이지로 이동
+const detailUrl =
+  ctx + "/stay/" + stayId +
+  "?checkin=" + encodeURIComponent(filters.checkin) +
+  "&checkout=" + encodeURIComponent(filters.checkout) +
+  "&adult=" + encodeURIComponent(filters.adult) +
+  "&child=" + encodeURIComponent(filters.child);
+window.location.assign(detailUrl);
+```
+
+### Controller: 자동완성 엔드포인트
+
+파일: `src/main/java/com/hotel/controller/SearchController.java`
 
 ```java
 // src/main/java/com/hotel/controller/SearchController.java
@@ -632,12 +674,11 @@ public class SearchController {
     @Autowired
     private StayService stayService;
 
-    // 자동완성용
     @GetMapping(value = "/search/suggestions", produces = "application/json; charset=UTF-8")
     @ResponseBody
     public List<StayVO> getSuggestions(@RequestParam(name = "keyword", required = false) String keyword) {
         String q = (keyword == null) ? "" : keyword.trim();
-        if (q.isEmpty() || q.length() < 1) {
+        if (q.isEmpty()) {
             return Collections.emptyList();
         }
         List<StayVO> results = stayService.searchStaysSuggestions(q);
@@ -647,12 +688,11 @@ public class SearchController {
         return results;
     }
 }
-
 ```
 
-### **Service: `StayServiceImpl.java`**
+### Service: 자동완성 비즈니스 로직
 
-자동 완성 로직을 수행하며, 매퍼를 통해 DB에 접근합니다.
+파일: `src/main/java/com/hotel/service/StayServiceImpl.java`
 
 ```java
 // src/main/java/com/hotel/service/StayServiceImpl.java
@@ -663,50 +703,101 @@ public List<StayVO> searchStaysSuggestions(String keyword) {
     }
     return stayMapper.searchStaysSuggestions(keyword.trim());
 }
-
 ```
 
-### **Mapper Interface: `StayMapper.java`**
+### Mapper Interface
 
-데이터베이스 접근을 위한 인터페이스에 자동 완성 메서드를 정의합니다.
+파일: `src/main/java/com/hotel/mapper/StayMapper.java`
 
 ```java
 // src/main/java/com/hotel/mapper/StayMapper.java
 List<StayVO> searchStaysSuggestions(@Param("keyword") String keyword);
-
 ```
 
-### **Mapper XML: `StayMapper.xml`**
+### Mapper XML: SQL
 
-MyBatis를 사용하여 키워드 검색을 위한 SQL 쿼리를 정의합니다. `UPPER` 함수와 `LIKE` 연산자를 사용하여 대소문자 구분 없이 검색하며, `ROWNUM`을 통해 최대 5개의 결과를 반환합니다.
+파일: `src/main/resources/com/hotel/mapper/StayMapper.xml`
 
 ```xml
 <!-- src/main/resources/com/hotel/mapper/StayMapper.xml -->
 <select id="searchStaysSuggestions" parameterType="string"
-    resultType="com.hotel.domain.StayVO">
-    SELECT * FROM (
-        SELECT
-            s.si_id AS siId,
-            s.si_name AS siName,
-            s.si_loca AS siLoca
-        FROM t_stay_info s
-        WHERE s.si_show = '1'
-          AND s.si_delete = '0'
-          AND (
-                UPPER(s.si_name) LIKE '%' || UPPER(#{keyword}) || '%'
-                OR UPPER(s.si_loca) LIKE '%' || UPPER(#{keyword}) || '%'
-            )
-        ORDER BY
-            CASE WHEN UPPER(s.si_name) LIKE UPPER(#{keyword}) || '%' THEN 1 ELSE 2 END,
-            s.si_name
-        ) WHERE ROWNUM &lt;= 5
+        resultType="com.hotel.domain.StayVO">
+  SELECT * FROM (
+    SELECT
+      s.si_id   AS siId,
+      s.si_name AS siName,
+      s.si_loca AS siLoca
+    FROM t_stay_info s
+    WHERE s.si_show = '1'
+      AND s.si_delete = '0'
+      AND (
+        UPPER(s.si_name) LIKE '%' || UPPER(#{keyword}) || '%'
+        OR UPPER(s.si_loca) LIKE '%' || UPPER(#{keyword}) || '%'
+      )
+    ORDER BY
+      CASE WHEN UPPER(s.si_name) LIKE UPPER(#{keyword}) || '%' THEN 1 ELSE 2 END,
+      s.si_name
+  ) WHERE ROWNUM <= 5
 </select>
-
 ```
 
-### **포트폴리오 주요 포인트 (Key Portfolio Points)**
+### 결과 목록 페이지: 필터 기반 검색
 
-- **실시간 자동 완성(Auto-suggestion) 기능 구현**: 사용자가 검색어를 입력하는 동안 실시간으로 관련 검색어를 제안하는 기능을 구현하여 사용자 경험(UX)을 향상시켰습니다.
-- **동적 SQL을 활용한 유연한 검색**: `MyBatis`의 `LIKE` 연산자와 `UPPER` 함수를 사용하여 숙소 이름과 지역명에 대한 대소문자 구분 없는 부분 일치 검색을 구현했습니다. `CASE` 문을 활용하여 검색어 일치도에 따른 정렬 우선순위를 부여하는 등 SQL 쿼리 최적화 노력을 기울였습니다.
-- **프론트엔드-백엔드 연동**: JSP, JavaScript(jQuery), Spring Controller, Service, Mapper로 이어지게 프론트엔드-백엔드를 연동했습니다.
+컨트롤러: `src/main/java/com/hotel/controller/RoomController.java`
+
+```java
+// src/main/java/com/hotel/controller/RoomController.java
+@GetMapping("/search")
+public String searchPage(@RequestParam(name = "lcId", required = false, defaultValue = "0") int lcId,
+                         @RequestParam(name = "rcId", required = false, defaultValue = "0") int rcId,
+                         @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate checkin,
+                         @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate checkout,
+                         @RequestParam(required = false, defaultValue = "2") int adult,
+                         @RequestParam(required = false, defaultValue = "0") int child,
+                         Model model, Principal principal) {
+    if (checkin == null)  checkin = LocalDate.now();
+    if (checkout == null) checkout = LocalDate.now().plusDays(1);
+
+    Map<String, Object> param = new HashMap<>();
+    param.put("lcId", lcId);
+    param.put("rcId", rcId);
+    param.put("checkin", checkin);
+    param.put("checkout", checkout);
+    param.put("totalPerson", adult + child);
+
+    List<StaySearchResultVO> stayList = stayService.getStayListFiltered(param);
+    // ... (북마크 처리 등)
+    model.addAttribute("stayList", stayList);
+    // ... (추가 모델 바인딩)
+    return "search/search";
+}
+```
+
+AJAX: `src/main/webapp/resources/js/search/searchFilter.js`
+
+```javascript
+// src/main/webapp/resources/js/search/searchFilter.js
+$.ajax({
+  url: `/stay/search`,
+  method: "GET",
+  data: { lcId, rcId, checkin, checkout, adult, child },
+  success: function (data) {
+    const $section = $(data).find("#searchResultsSection");
+    $("#searchResultsSection").html($section.html());
+  }
+});
+```
+
+## 포트폴리오 주요 포인트
+
+- 실시간 자동완성: 입력 중 제안을 제공하고 늦게 도착한 응답을 무시하여 안정적 UX를 구현했습니다.
+- SQL 최적화: 대소문자 무시 부분일치 + 접두 우선 정렬 + 결과 상한으로 품질과 성능을 균형 있게 달성했습니다.
+- 부분 갱신 UI: 필터 변경 시 결과 영역만 갱신하여 빠른 체감 성능과 매끄러운 UX를 제공합니다.
+- 계층 분리: JSP/JS → Spring Controller → Service → MyBatis Mapper로 역할 분담이 명확하여 유지보수성이 높습니다.
+
+## 구현 메모
+
+- `search.jsp`에 남아 있는 `searchForm action="/search/results"`는 현재 흐름에서 사용되지 않습니다. 자동완성 선택은 상세 페이지로 즉시 이동하고, 목록 갱신은 `GET /stay/search` AJAX로 처리합니다.
+- `data-api` 속성은 존재하더라도 `keyword.js`에서는 사용하지 않습니다(`data-context` 사용). 필요 시 마크업과 문서를 일치시키도록 정리하는 것을 권장합니다.
+
 
